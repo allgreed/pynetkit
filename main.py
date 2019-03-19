@@ -41,11 +41,13 @@ def get_domain_subnets(path="./subnets.yml"):
 pass_data = click.make_pass_decorator(object)
 
 @click.group()
+@click.option('--labconf') # TODO: Path type!
+@click.option('--netz')
 @click.pass_context
-def cli(ctx):
+def cli(ctx, labconf, netz):
     domains = defaultdict(list)
-    subnets = get_domain_subnets()
-    contents = get_conf_contents()
+    subnets = get_domain_subnets(path=netz)
+    contents = get_conf_contents(path=labconf)
 
     for statement in contents:
         try:
