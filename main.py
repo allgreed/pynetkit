@@ -12,8 +12,8 @@ DomainAsoc = namedtuple('DomainAsoc', 'iface domain')
 IFACE_STATEMENT_REGEXP = r'([a-z0-9_]+)\[(\d+)\]\s*=\s*"([A-Z])'
 
 
-def get_conf_contents(conf_path="./lab.conf"):
-    with open(conf_path) as f:
+def get_conf_contents(path="./lab.conf"):
+    with open(path) as f:
         raw = f.readlines()
 
     stripped = map(lambda l: l.rstrip("\n"), raw)
@@ -30,8 +30,8 @@ def parse_iface_statement(statement):
         raise ValueError("Not an iface statement")
 
 
-def get_domain_subnets(subnets_path="./subnets.yml"):
-    return {k: IPv4Network(v) for k, v in yaml.safe_load(open(subnets_path)).items()}
+def get_domain_subnets(path="./subnets.yml"):
+    return {k: IPv4Network(v) for k, v in yaml.safe_load(open(path)).items()}
 
 
 def main():
@@ -47,6 +47,8 @@ def main():
         except ValueError:
             continue
 
+    # TODO: Refactor this crap
+
     for domain, iface in domains.items():
         subnet = subnets[domain]
 
@@ -61,4 +63,5 @@ def main():
         print(argh)
 
 if __name__ == "__main__":
+    # TODO: Add Click CLI
     main()
