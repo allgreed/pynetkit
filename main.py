@@ -9,7 +9,8 @@ from functools import update_wrapper
 import click
 
 
-BoundIface = namedtuple('BoundIface', 'host iface')
+BoundIface = namedtuple('BoundIface', 'host if_no')
+NetedIface = namedtuple('NetedIface', 'host if_no ip netmask')
 DomainAsoc = namedtuple('DomainAsoc', 'iface domain')
 
 IFACE_STATEMENT_REGEXP = r'([a-z0-9_]+)\[(\d+)\]\s*=\s*"([A-Z])'
@@ -27,19 +28,17 @@ def parse_iface_statement(statement):
     result = re.match(IFACE_STATEMENT_REGEXP, statement)
 
     if result:
-        host, iface, domain = result.groups()
-        return DomainAsoc(iface=BoundIface(host=host, iface=iface), domain=domain)
+        host, if_no, domain = result.groups()
+        return DomainAsoc(iface=BoundIface(host=host, if_no=if_no), domain=domain)
     else:
-        raise ValueError("Not an iface statement")
+        raise ValueError("Not an interface statement")
 
 
 def get_domain_subnets(path="./subnets.yml"):
     return {k: IPv4Network(v) for k, v in yaml.safe_load(open(path)).items()}
 
 
-Data = namedtuple("Data", "domains subnets")
-
-pass_data = click.make_pass_decorator(Data)
+pass_data = click.make_pass_decorator(object)
 
 @click.group()
 @click.pass_context
@@ -55,30 +54,51 @@ def cli(ctx):
         except ValueError:
             continue
 
-    ctx.obj = Data(domains=domains, subnets=subnets)
+    def net_domain(domain, bound_ifaces):
+        subnet = subnets[domain]
+        hosts = subnet.hosts()
+
+        return [NetedIface(*iface, next(hosts), subnet.netmask) for iface in bound_ifaces]
+
+    neted_domains = { k: net_domain(k, v) for k, v in domains.items() }
+
+    ctx.obj = neted_domains.values()
 
 
 @click.command()
 @pass_data
 def ifup(data):
-    # TODO: Refactor this crap
-    ble = []
-    for domain, iface in data.domains.items():
-        subnet = data.subnets[domain]
+    for domain in data:
+        for i in domain:
+            ifcmd_template = "ifconfig eth{ifno} {ip} netmask {netmask} up" 
+            ifcmd = ifcmd_template.format(ifno=i.if_no, ip=i.ip, netmask=i.netmask)
 
-        ble += zip(subnet.hosts(), iface, repeat(subnet.netmask))
+            cmd_template = "echo '{command}' >> {host}.startup"
+            cmd = cmd_template.format(command=ifcmd, host=i.host)
+            print(cmd)
 
-    for i in ble:
-        fe_template = "ifconfig eth{ifno} {ip} netmask {netmask} up" 
-        fe = fe_template.format(ifno=i[1].iface, ip=i[0], netmask=i[2])
 
-        argh_template = "echo '{command}' >> {host}.startup"
-        argh = argh_template.format(command=fe, host=i[1].host)
-        print(argh)
+@click.command()
+@pass_data
+def gateway_routes(data):
+    for domain in data:
+        router = next(i for i in domain if "r" in i.host)
+
+        default_route_cmd = "route add default gw %s" % router.ip
+
+        for i in domain:
+            if "pc" not in i.host:
+                continue
+
+            cmd_template = "echo '{command}' >> {host}.startup"
+            cmd = cmd_template.format(command=default_route_cmd, host=i.host)
+
+            print(cmd)
 
 
 def main():
     cli.add_command(ifup)
+    cli.add_command(gateway_routes, "gw")
 
     cli()
 
