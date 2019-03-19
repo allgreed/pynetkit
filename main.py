@@ -4,6 +4,9 @@ import yaml
 from collections import namedtuple, defaultdict
 from ipaddress import IPv4Network
 from itertools import repeat
+from functools import update_wrapper
+
+import click
 
 
 BoundIface = namedtuple('BoundIface', 'host iface')
@@ -34,11 +37,16 @@ def get_domain_subnets(path="./subnets.yml"):
     return {k: IPv4Network(v) for k, v in yaml.safe_load(open(path)).items()}
 
 
-def main():
+Data = namedtuple("Data", "domains subnets")
+
+pass_data = click.make_pass_decorator(Data)
+
+@click.group()
+@click.pass_context
+def cli(ctx):
     domains = defaultdict(list)
     subnets = get_domain_subnets()
     contents = get_conf_contents()
-    ble = []
 
     for statement in contents:
         try:
@@ -47,10 +55,16 @@ def main():
         except ValueError:
             continue
 
-    # TODO: Refactor this crap
+    ctx.obj = Data(domains=domains, subnets=subnets)
 
-    for domain, iface in domains.items():
-        subnet = subnets[domain]
+
+@click.command()
+@pass_data
+def ifup(data):
+    # TODO: Refactor this crap
+    ble = []
+    for domain, iface in data.domains.items():
+        subnet = data.subnets[domain]
 
         ble += zip(subnet.hosts(), iface, repeat(subnet.netmask))
 
@@ -62,6 +76,12 @@ def main():
         argh = argh_template.format(command=fe, host=i[1].host)
         print(argh)
 
+
+def main():
+    cli.add_command(ifup)
+
+    cli()
+
+
 if __name__ == "__main__":
-    # TODO: Add Click CLI
     main()
