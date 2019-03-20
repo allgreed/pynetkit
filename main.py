@@ -3,7 +3,7 @@ import re
 import yaml
 from collections import namedtuple, defaultdict
 from ipaddress import IPv4Network
-from itertools import repeat
+from itertools import repeat, combinations
 from functools import update_wrapper
 
 import click
@@ -108,9 +108,30 @@ def gateway_routes(data):
             print(cmd)
 
 
+@click.command()
+@pass_data
+def check_all_connections(data):
+    neted_ifaces = [i for i in sum(data, [])]
+    pings_required = combinations(neted_ifaces, 2)
+
+    pings_by_host = defaultdict(list)
+    for ping in pings_required:
+        pings_by_host[ping[0].host].append(ping[1].ip)
+
+    for host, pings in pings_by_host.items():
+        for ping in pings:
+            ping_cmd_template = "ping {ip} -c 1 -W 1"
+            ping_cmd = ping_cmd_template.format(ip=ping)
+
+            cmd_template = "echo '{command}' >> _test/{host}.test"
+            cmd = cmd_template.format(command=ping_cmd, host=host)
+
+            print(cmd)
+
 def main():
     cli.add_command(ifup)
     cli.add_command(gateway_routes, "gw")
+    cli.add_command(check_all_connections, "cta")
 
     cli()
 
