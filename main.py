@@ -41,8 +41,18 @@ def get_domain_subnets(path="./subnets.yml"):
 pass_data = click.make_pass_decorator(object)
 
 @click.group()
-@click.option('--labconf') # TODO: Path type!
-@click.option('--netz')
+@click.option(
+    "--labconf",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    help="Location of lab.conf",
+)
+@click.option(
+    "--netz",
+    required=True,
+    type=click.Path(exists=True, dir_okay=False, resolve_path=True),
+    help="Location of netz.yml",
+)
 @click.pass_context
 def cli(ctx, labconf, netz):
     domains = defaultdict(list)
